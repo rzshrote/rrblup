@@ -139,10 +139,8 @@ def rrBLUP_REML_calc_lamb_Ur(SHS: numpy.ndarray, nfixed: Integral) -> Tuple[nump
 
         Where:
 
-        - ``lamb`` is a vector of shape ``(n-p,)`` containing non-zero eigenvalues.
-        - ``Ur`` is a matrix of shape ``(n-p,n)`` containing non-zero eigenvectors.
-        - ``n`` is the number of observations.
-        - ``p`` is the number of model fixed effects.
+        - ``lamb`` is a vector of shape ``(nobs-nfixed,)`` containing non-zero eigenvalues.
+        - ``Ur`` is a matrix of shape ``(nobs,nobs-nfixed)`` containing non-zero eigenvectors.
     """
     # Calculate the spectral decomposition for a symmetric matrix
     # SHS = U @ numpy.diag(D) @ U.T
@@ -155,35 +153,32 @@ def rrBLUP_REML_calc_lamb_Ur(SHS: numpy.ndarray, nfixed: Integral) -> Tuple[nump
     # ``eigh`` stores eigenvalues increasing in order
     # (nobs,) -> (nobs-nfixed,)
     lamb = D[nfixed:]
-    # Get the non-zero eigenvalue, eigenvectors by subsetting rows
-    # (nobs,nobs) -> (nobs-nfixed,nobs)
-    Ur = U[nfixed:,:]
+    # Get the non-zero eigenvalue, eigenvectors by subsetting columns
+    # (nobs,nobs) -> (nobs,nobs-nfixed)
+    Ur = U[:,nfixed:]
     return lamb, Ur
 
-def rrBLUP_REML_calc_nusq(Ur: numpy.ndarray, Y: numpy.ndarray) -> numpy.ndarray:
+def rrBLUP_REML_calc_nusq(Ur: numpy.ndarray, S: numpy.ndarray, Y: numpy.ndarray) -> numpy.ndarray:
     """
     Calculate the nu matrix.
+    Nu = Ur'SY
+    NuSq = (Nu (Hadamard product) Nu)
 
     Parameters
     ----------
     Ur : numpy.ndarray
-        A matrix of shape ``(n-p,n)`` containing non-zero eigenvectors.
+        A matrix of shape ``(nobs-nfixed,nobs)`` containing non-zero eigenvectors.
 
-        Where:
+    S : numpy.ndarray
+        A matrix of shape ``(nobs,nobs)`` designating the null space projection.
+        The null space projection matrix is symmetric and idempotent.
 
-        - ``n`` is the number of observations.
-        - ``p`` is the number of model fixed effects.
     Y : numpy.ndarray
-        A matrix of shape ``(n,t)`` containing observations.
-
-        Where:
-
-        - ``n`` is the number of observations.
-        - ``t`` is the number of traits.
+        A matrix of shape ``(nobs,ntrait)`` containing observations.
     """
     # Calculate nu squared values for the phenotypes
-    # (nobs-nfixed,nobs) @ (nobs,ntrait) -> (nobs-nfixed,ntrait)
-    NuSq = numpy.square(Ur @ Y)
+    # (nobs-nfixed,nobs) @ (nobs,nobs) @ (nobs,ntrait) -> (nobs-nfixed,ntrait)
+    NuSq = numpy.square(Ur.T @ S @ Y)
     return NuSq
 
 # Define restricted likelihood function to be optimized
@@ -516,12 +511,12 @@ def rrBLUP_REML(
     # SHS = S(ZKZ' + delta * I)S (K is identity in this case))
     # We only take SZKZ'S since we know that we can add in eigenvalues later:
     # ([Ur])diag(lambda_1 + delta, ..., lambda_n + delta)([Ur]')
-    # (nobs,nobs), integer -> (nobs-nfixed,), (nobs-nfixed,nobs)
+    # (nobs,nobs), integer -> (nobs-nfixed,), (nobs,nobs-nfixed)
     lamb, Ur = rrBLUP_REML_calc_lamb_Ur(SHS, nfixed)
 
     # Calculate nu squared values for the phenotypes
-    # (nobs-nfixed,nobs), (nobs,ntrait) -> (nobs-nfixed,ntrait)
-    NuSq = rrBLUP_REML_calc_nusq(Ur, Y)
+    # (nobs,nobs-nfixed)' @ (nobs,nobs) @ (nobs,ntrait) -> (nobs-nfixed,ntrait)
+    NuSq = rrBLUP_REML_calc_nusq(Ur, S, Y)
 
     # output vectors for optimized hyperparameters
     delta = numpy.empty(ntrait, dtype=float)
