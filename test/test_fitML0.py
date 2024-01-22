@@ -148,3 +148,14 @@ def test_rrBLUP_ML0(yvec, Zmat):
     out = rrBLUP_ML0(yvec, Zmat)
     assert isinstance(out, dict)
 
+# code for running in terminal
+if False:
+    import pandas
+    from rrblup.fitML0 import rrBLUP_ML0
+    traits_df = pandas.read_csv("traits.csv")
+    y = traits_df.iloc[:,1].to_numpy(dtype = float)
+    markers_df = pandas.read_csv("markers.csv")
+    Z = markers_df.to_numpy(dtype = float)
+    fmML0 = rrBLUP_ML0(y, Z)
+    yhat = fmML0["yhat"]
+    1.0 - ((y - yhat)**2).sum() / (y**2).sum()
