@@ -5,6 +5,12 @@ from typing import Tuple, Union
 import numpy
 from scipy.optimize import minimize, Bounds
 
+from rrblup.util import check_is_gteq
+from rrblup.util import check_is_ndarray
+from rrblup.util import check_is_Real
+from rrblup.util import check_is_Integral
+from rrblup.util import check_ndarray_ndim
+from rrblup.util import check_ndarray_axis_len_eq
 #####################
 ### Initial tests ###
 #####################
@@ -301,7 +307,7 @@ def gauss_seidel(A: numpy.ndarray, b: numpy.ndarray, atol: Real = 1e-8, maxiter:
     # return estimates
     return xcurr
 
-def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Real = 1e5):
+def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Real = 1e5, gsatol: Real = 1e-8, gsmaxiter: Integral = 1000):
     """
     Ridge regression BLUP for the simple model::
 
@@ -315,6 +321,7 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     
     Uses the EMMA formulation to solve for ``varE`` and ``varU``.
     Uses the Nelder-Mead method to optimize for variance components.
+    Marker effects are estimated using the Gauss-Seidel method.
 
     Parameters
     ----------
@@ -322,12 +329,43 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
         A vector of observations of shape ``(nobs,)``. If not mean centered, will be centered around zero.
     Z : numpy.ndarray
         A genotype matrix of shape ``(nobs,nmkr)``.
-    
+    varlb : Real
+        Lower bound permitted for variance component estimation.
+        Must be non-negative.
+    varub : Real
+        Upper bound permitted for variance component estimation.
+        Must be non-negative and greater than ``varlb``.
+    gsatol : Real
+        Absolute tolerance for the Gauss-Seidel method.
+        Iterate until the sum of absolute differences between successive 
+        iterations is less than this value or ``maxiter`` is reached.
+        Must be non-negative.
+    gsmaxiter : Integral
+        Maximum number of iterations for the Gauss-Seidel method.
+        Must be non-negative.
+
     Returns
     -------
     out : dict
         A dictionary of output values.
     """
+    # check input types
+    check_is_ndarray(y, "y")
+    check_is_ndarray(Z, "Z")
+    check_is_Real(varlb, "varlb")
+    check_is_Real(varub, "varub")
+    check_is_Real(gsatol, "gsatol")
+    check_is_Integral(gsmaxiter, "gsmaxiter")
+
+    # check input values
+    check_ndarray_ndim(y, "y", 1)
+    check_ndarray_ndim(Z, "Z", 2)
+    check_ndarray_axis_len_eq(Z, "Z", 0, len(y))
+    check_is_gteq(varlb, "varlb", 0.0)
+    check_is_gteq(varub, "varub", varlb)
+    check_is_gteq(gsatol, "gsatol", 0.0)
+    check_is_gteq(gsmaxiter, "gsmaxiter", 0)
+
     # get the mean of y (the intercept)
     # (nobs,) -> scalar
     meanY = y.mean()
@@ -336,7 +374,8 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     # (nobs,)
     y = rrBLUP_ML0_center_y(y)
 
-    # calculate the number of observations
+    # get the number of observations
+    # scalar
     nobs = len(y)
 
     # create genomic relationship matrix
@@ -356,15 +395,16 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     etasq = rrBLUP_ML0_calc_etasq(V, y)
 
     # calculate variance of y
+    # (nobs,) -> scalar
     varY = y.var()
 
-    # calculate initial estimate of log(varE); this is half of varY
+    # calculate initial estimates of log(varE) and log(varU); set each to half of varY
+    # scalar
     logVarE0 = numpy.log(0.5 * varY)
-
-    # calculate initial estimate of log(varU); this is half of varY
     logVarU0 = numpy.log(0.5 * varY)
 
     # construct inital starting position
+    # (2,)
     logVarComp0 = numpy.array([logVarE0, logVarU0])
 
     # construct search space boundaries
@@ -396,7 +436,7 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     Zty = rrBLUP_ML0_calc_Zty(Z, y)
 
     # solve for (Z'Z + lambda * I)u = Z'y using the Gauss-Seidel method
-    uhat = gauss_seidel(ZtZplI, Zty)
+    uhat = gauss_seidel(ZtZplI, Zty, gsatol, gsmaxiter)
 
     # calculate heritability
     h2 = varU / (varU + varE)
