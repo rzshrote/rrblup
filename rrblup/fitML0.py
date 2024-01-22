@@ -328,12 +328,16 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     out : dict
         A dictionary of output values.
     """
+    # get the mean of y (the intercept)
+    # (nobs,) -> scalar
+    meanY = y.mean()
+
     # center trait data around mean
     # (nobs,)
     y = rrBLUP_ML0_center_y(y)
 
     # calculate the number of observations
-    n = len(y)
+    nobs = len(y)
 
     # create genomic relationship matrix
     # (nobs,nobs)
@@ -373,7 +377,7 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     soln = minimize(
         fun = rrBLUP_ML0_neg2LogLik_fast,
         x0 = logVarComp0,
-        args = (etasq, d, n),
+        args = (etasq, d, nobs),
         method = 'Nelder-Mead',
         bounds = bounds,
     )
@@ -397,20 +401,33 @@ def rrBLUP_ML0(y: numpy.ndarray, Z: numpy.ndarray, varlb: Real = 1e-5, varub: Re
     # calculate heritability
     h2 = varU / (varU + varE)
 
-    # calculate residuals
-    resid = y - Z @ uhat
+    # reconstruct the log-likelihood (minus constant)
+    logLik = -2 * soln.fun
+
+    # get intercept incidence matrix
+    # (nobs,1)
+    X = numpy.full((nobs,1), 1.0, float)
+
+    # get intercept
+    # (1,)
+    betahat = numpy.array([meanY])
+
+    # calculate y hat
+    yhat = X.dot(betahat) + Z.dot(uhat)
 
     # create output dictionary
     out = {
         # ridge regression elements
-        "y": y,
+        "yhat": yhat,
+        "X": X,
+        "betahat": betahat,
         "Z": Z,
         "uhat": uhat,
-        "e": resid,
         # variance estimates
         "varE": varE,
         "varU": varU,
         "h2": h2,
+        "logLik": logLik,
         # optimization solution object
         "soln": soln,
     }
