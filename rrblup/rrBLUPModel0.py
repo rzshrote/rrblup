@@ -7,15 +7,18 @@ from typing import Optional
 from rrblup.GenomicPredictionModel import GenomicPredictionModel
 import numpy
 
-class RRBLUPModel(GenomicPredictionModel):
+class rrBLUPModel0(GenomicPredictionModel):
     """
-    docstring for RRBLUPModel.
+    RR-BLUP model for fitting a single random effect and a single intercept fixed effect.
+
+    If the observations are mean centered, then
     """
 
     ########################## Special Object Methods ##########################
     def __init__(
             self,
             trait: Optional[numpy.ndarray],
+            method: str = "ML",
         ) -> None:
         """
         Constructor for RRBLUPModel.
@@ -24,6 +27,8 @@ class RRBLUPModel(GenomicPredictionModel):
         ----------
         trait : numpy.ndarray, None
             Names of traits.
+        method : str
+            Fitting method to use. Options are ``{"ML"}``.
         """
         # assignments
         self.trait = trait

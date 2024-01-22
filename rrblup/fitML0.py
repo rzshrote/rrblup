@@ -11,9 +11,6 @@ from rrblup.util import check_is_Real
 from rrblup.util import check_is_Integral
 from rrblup.util import check_ndarray_ndim
 from rrblup.util import check_ndarray_axis_len_eq
-#####################
-### Initial tests ###
-#####################
 
 def rrBLUP_ML0_calc_G(Z: numpy.ndarray) -> numpy.ndarray:
     """
